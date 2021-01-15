@@ -1,0 +1,4 @@
+.idea/
+kafka-connect-file-pulse/
+network-intrusion-detection-system.iml
+spark-ml-detection/src/main/scala/intrusionDetection/playground.scala
