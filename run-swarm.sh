@@ -11,9 +11,9 @@
 set -a
 KAFKA_TOPIC="netflows"
 NUM_OF_SPARK_WORKERS="2"
-MODELS_LOCATION="s3a://minasdataset/Models"
-TRAINING_FILE_LOCATION="s3a://minasdataset/KDDTrain+.txt"
-SPARK_TRAIN_ARGUMENTS="--conf spark.hadoop.fs.s3a.endpoint=s3.eu-central-1.amazonaws.com --conf spark.hadoop.fs.s3a.access.key=AKIATHZAGHYTESFTZEO2 --conf spark.hadoop.fs.s3a.secret.key=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"
+MODELS_LOCATION="<s3-location>/Models"
+TRAINING_FILE_LOCATION="<s3-location>/KDDTrain+.txt"
+SPARK_TRAIN_ARGUMENTS="--conf spark.hadoop.fs.s3a.endpoint=s3.eu-central-1.amazonaws.com --conf spark.hadoop.fs.s3a.access.key=<access-key> --conf spark.hadoop.fs.s3a.secret.key=<secret-key>"
 ML_ALGORITHM="rf" # rf for Random forest or dt for Decision Tree
 OUTPUT_METHOD="elasticsearch" #console or elasticsearch
 SPARK_TEST_ARGUMENTS="--conf spark.network.timeout=300 --conf spark.sql.streaming.metricsEnabled=true --conf spark.hadoop.fs.s3a.endpoint=s3.eu-central-1.amazonaws.com
