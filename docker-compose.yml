@@ -1,0 +1,148 @@
+version: '3'
+
+services:
+
+  zookeeper:
+   image: wurstmeister/zookeeper
+   container_name: zookeeper
+   ports:
+     - "2181:2181"
+  kafka:
+   image: wurstmeister/kafka
+   container_name: kafka
+   depends_on:
+     - zookeeper
+   ports:
+     - "9092:9092"
+     - "29092:29092"
+   environment:
+     KAFKA_LISTENERS: INSIDE://kafka:29092,OUTSIDE://kafka:9092
+     KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:29092,OUTSIDE://localhost:9092
+     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+     KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+     KAFKA_CREATE_TOPICS: "${KAFKA_TOPIC}:2:1"
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock
+  spark-master:
+   image: bde2020/spark-master:3.0.2-hadoop3.2
+   container_name: spark-master
+   ports:
+     - "8080:8080"
+     - "7077:7077"
+   environment:
+     - INIT_DAEMON_STEP=setup_spark
+  spark-worker-1:
+   image: bde2020/spark-worker:3.0.2-hadoop3.2
+   container_name: spark-worker-1
+   depends_on:
+     - spark-master
+   ports:
+     - "8081:8081"
+   environment:
+     - "SPARK_MASTER=spark://spark-master:7077"
+   volumes:
+     - ${DATASET_LOCATION}:/usr/myfiles/Dataset
+     - ${MODELS_LOCATION}:/usr/myfiles/Models
+  spark-worker-2:
+   image: bde2020/spark-worker:3.0.2-hadoop3.2
+   container_name: spark-worker-2
+   depends_on:
+     - spark-master
+   ports:
+     - "8082:8082"
+   environment:
+     - "SPARK_MASTER=spark://spark-master:7077"
+     - "SPARK_WORKER_CORES=1"
+     - "SPARK_WORKER_MEMORY=1G"
+   volumes:
+     - ${DATASET_LOCATION}:/usr/myfiles/Dataset
+     - ${MODELS_LOCATION}:/usr/myfiles/Models
+  spark-submit-training:
+   image: minkal/spark-submit-detection
+   container_name: spark-detection-training
+   depends_on:
+     - spark-master
+     - spark-worker-1
+     - spark-worker-2
+   environment:
+     SPARK_APPLICATION_MAIN_CLASS: intrusionDetection.batchTraining
+     SPARK_APPLICATION_ARGS: "/usr/myfiles/Dataset/${TRAINING_FILE} /usr/myfiles/Models"
+     ENABLE_INIT_DAEMON: "false"
+   volumes:
+     - ${DATASET_LOCATION}:/usr/myfiles/Dataset
+     - ${MODELS_LOCATION}:/usr/myfiles/Models
+  spark-submit-testing:
+   image: minkal/spark-submit-detection
+   container_name: spark-detection-testing
+   depends_on:
+     - spark-submit-training
+     - spark-master
+     - spark-worker-1
+     - spark-worker-2
+     - kafka
+   ports:
+     - "4040:4040"
+   environment:
+     SPARK_APPLICATION_MAIN_CLASS: intrusionDetection.realTimeTesting
+     SPARK_APPLICATION_ARGS: "${KAFKA_TOPIC} /usr/myfiles/Models rf kafka:29092 ${OUTPUT_METHOD}"
+     SPARK_SUBMIT_ARGS: "--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.2"
+     ENABLE_INIT_DAEMON: "false"
+   volumes:
+     - ${DATASET_LOCATION}:/usr/myfiles/Dataset
+     - ${MODELS_LOCATION}:/usr/myfiles/Models
+#  connect-spooldir:
+#    image: minkal/kafka-connect-spooldir
+#    container_name: connect-spooldir
+#    depends_on:
+#      - kafka
+#      - spark-submit-testing
+#    ports:
+#      - "8083:8083"
+#      - "8000:8000"
+#    logging:
+#      driver: none
+#    environment:
+#      CONNECT_BOOTSTRAP_SERVERS: 'kafka:29092'
+#      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+#      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+#      CONNECT_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+#      SP_TOPIC: netflows
+#      SP_INPUT_PATH: /usr/myfiles/input
+#    volumes:
+#      - /home/diomfeas/Desktop/input:/usr/myfiles/input
+  elasticsearch:
+   image: elasticsearch:7.12.0
+   container_name: elasticsearch
+   ports:
+     - "9200:9200"
+   environment:
+     - discovery.type=single-node
+     - xpack.security.enabled=false
+     - ES_HEAP_SIZE=1g
+   logging:
+     driver: none
+ #   volumes:
+ #     - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+  kibana:
+   image: kibana:7.12.0
+   container_name: kibana
+   ports:
+     - "5601:5601"
+   depends_on:
+     - elasticsearch
+   environment:
+     ELASTICSEARCH_URL: http://elasticsearch:9200
+   logging:
+     driver: none
+ #   volumes:
+ #     - ./kibana.yml:/usr/share/kibana/config/kibana.yml
+  es_kibana_setup:
+   image: minkal/es_kib_setup
+   container_name: es_kib_setup
+   environment:
+     ES_HOSTNAME: elasticsearch:9200
+     KBN_HOSTNAME: kibana:5601
+   depends_on: 
+     - elasticsearch
+     - kibana

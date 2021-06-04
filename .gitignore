@@ -2,3 +2,5 @@
 kafka-connect-file-pulse/
 network-intrusion-detection-system.iml
 spark-ml-detection/src/main/scala/intrusionDetection/playground.scala
+spark-ml-detection/src/main/scala/intrusionDetection/batchTesting.scala
+kafka-connect-spooldir/

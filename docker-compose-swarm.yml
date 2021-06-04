@@ -1,0 +1,177 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - cluster_net
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==master
+  kafka:
+    image: wurstmeister/kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - target: 9094
+        published: 9094
+        protocol: tcp
+        mode: host
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_CREATE_TOPICS: "${KAFKA_TOPIC}:${NUM_OF_SPARK_WORKERS}:3"
+    networks: 
+      - cluster_net
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.type==worker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  spark-master:
+    image: bde2020/spark-master:3.0.2-hadoop3.2
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==master
+    networks: 
+      - cluster_net
+  spark-worker:
+    image: bde2020/spark-worker:3.0.2-hadoop3.2
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==worker
+        max_replicas_per_node: 1
+      replicas: ${NUM_OF_SPARK_WORKERS}
+    networks: 
+      - cluster_net
+  spark-submit-training:
+    image: minkal/spark-submit-detection
+    depends_on:
+      - spark-master
+      - spark-worker
+    environment:
+      SPARK_APPLICATION_MAIN_CLASS: intrusionDetection.batchTraining
+      SPARK_APPLICATION_ARGS: "${TRAINING_FILE_LOCATION} ${MODELS_LOCATION}"
+      SPARK_SUBMIT_ARGS: "${SPARK_TRAIN_ARGUMENTS}"
+      ENABLE_INIT_DAEMON: "false"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==master
+      restart_policy:
+        condition: on-failure
+    networks: 
+      - cluster_net
+  spark-submit-testing:
+    image: minkal/spark-submit-detection
+    depends_on:
+      - spark-submit-training
+      - spark-master
+      - spark-worker
+      - kafka
+      - zookeeper
+      - elasticsearch
+      - kibana
+    environment:
+      SPARK_APPLICATION_MAIN_CLASS: intrusionDetection.realTimeTesting
+      SPARK_APPLICATION_ARGS: "${KAFKA_TOPIC} ${MODELS_LOCATION} ${ML_ALGORITHM} kafka:9092 ${OUTPUT_METHOD}"
+      SPARK_SUBMIT_ARGS: "${SPARK_TEST_ARGUMENTS} --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.2"
+      ENABLE_INIT_DAEMON: "false"
+    ports:
+      - "4040:4040"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==master
+    networks: 
+      - cluster_net
+  elasticsearch:
+    image: elasticsearch:7.12.0
+    hostname: "{{.Node.Hostname}}"
+    environment:
+      - node.name={{.Node.Hostname}}
+      - cluster.name=es-cluster
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.seed_hosts=elasticsearch
+      - cluster.initial_master_nodes=${ELASTICSEARCH_NODE_NAMES}
+      - node.ml=false
+      - xpack.ml.enabled=false
+      - xpack.security.enabled=false
+      - xpack.watcher.enabled=false
+      - bootstrap.memory_lock=false
+      - network.host=0.0.0.0
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - target: 9200
+        published: 9200
+        protocol: tcp
+        mode: host
+    networks:
+      - cluster_net
+    deploy:
+      mode: global
+      endpoint_mode: dnsrr
+      resources:
+        limits:
+          memory: 1G
+      placement:
+        constraints:
+          - node.labels.role==esnode
+  kibana:
+    image: kibana:7.12.0
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+    environment:
+      ELASTICSEARCH_URL: elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: changeme
+    networks: 
+      - cluster_net
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==esnode
+  es_kibana_setup:
+    image: minkal/es_kib_setup
+    environment:
+      ES_HOSTNAME: elasticsearch:9200
+      KBN_HOSTNAME: kibana:5601
+    depends_on: 
+      - elasticsearch
+      - kibana
+    networks: 
+      - cluster_net
+    deploy:
+      placement:
+        constraints:
+          - node.labels.role==esnode
+      
+networks: 
+  cluster_net:
+    driver: overlay
+    attachable: true
+    name: cluster_net

@@ -37,6 +37,9 @@ package object common {
     "dst_host_srv_diff_host_rate","dst_host_serror_rate","dst_host_srv_serror_rate",
     "dst_host_rerror_rate","dst_host_srv_rerror_rate")
 
+  val outputCols = Array("duration","protocol_type","service","flag","src_bytes","dst_bytes","label",
+    "num_failed_logins","logged_in","num_compromised","count","predictedLabel","timestamp")
+
   val kddDataSchema = StructType(Array(
     StructField("duration",DoubleType),
     StructField("protocol_type",StringType),
