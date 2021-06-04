@@ -17,7 +17,7 @@ SPARK_TRAIN_ARGUMENTS="--conf spark.hadoop.fs.s3a.endpoint=s3.eu-central-1.amazo
 ML_ALGORITHM="rf" # rf for Random forest or dt for Decision Tree
 OUTPUT_METHOD="elasticsearch" #console or elasticsearch
 SPARK_TEST_ARGUMENTS="--conf spark.network.timeout=300 --conf spark.sql.streaming.metricsEnabled=true --conf spark.hadoop.fs.s3a.endpoint=s3.eu-central-1.amazonaws.com
- --conf spark.hadoop.fs.s3a.access.key=AKIATHZAGHYTESFTZEO2 --conf spark.hadoop.fs.s3a.secret.key=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"
+ --conf spark.hadoop.fs.s3a.access.key=<access-key> --conf spark.hadoop.fs.s3a.secret.key=<secret-key>"
 ELASTICSEARCH_NODE_NAMES="node6.swarm1.network-intrusion-detect-pg0.emulab.net,node7.swarm1.network-intrusion-detect-pg0.emulab.net,nodees.swarm1.network-intrusion-detect-pg0.emulab.net"
 set +a
 
