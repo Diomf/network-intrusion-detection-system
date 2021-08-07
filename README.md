@@ -12,6 +12,12 @@ With the growing use of web based services, the volume and complexity of network
 ## System Architecture
 ![alt text](https://i.imgur.com/jkndEV3.png)
 
+ Initially, during the batch-processing training phase, labeled network flows are loaded from a distributed storage of our choice into Apache Spark to pass through machine learning pre-processing steps and be transformed into the necessary state for further processing. A feature selection algorithm is applied, namely Chi-Squared selection, to retrieve the most valuable features which are, then, used to train several supervised machine learning classifiers. The resulting trained models are loaded in the distributed storage which signals the end of the training phase.
+
+During the stream-processing testing phase, unlabeled network logs are fed into a Kafka topic that acts as a reliable input handling substrate to the stream processing pipeline. An Apache Spark structured streaming job has already started and loaded all the trained machine learning classifiers. Subsequently, it subscribes to the Kafka topic through a Kafka Consumer type connection to read the incoming network flows and classify them into malicious or benign network connections based on the prediction given from the trained models. The classified flows are stored in an Elasticsearch cluster that is queried and searched by Kibana to display live insights on a pre-designed dashboard.
+
+The deployment and orchestration of all the aforementioned services is handled by Docker.
+
 
 ## Installation 
 The only requirement for the deployment of the system locally or on a cluster is the installation of Docker on each node.
